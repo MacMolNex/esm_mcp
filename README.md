@@ -94,6 +94,33 @@ python notebooks/esm_if_llh.py -i examples/data.csv -w examples/wt.fasta -p exam
 ### Install ESM MCP server
 ```shell
 fastmcp install claude-code mcp-servers/esm_mcp/src/esm_mcp.py --python mcp-servers/esm_mcp/env/bin/python
+fastmcp install gemini-cli mcp-servers/esm_mcp/src/esm_mcp.py --python mcp-servers/esm_mcp/env/bin/python
+
+```
+
+### Call ESM MCP service
+1. Train a ESM-fitness model
+```markdown
+Can you help train a esm model for data @examples/case2.1_subtilisin/ and save it to 
+@examples/case2.1_subtilisin/esm_fitness using the esm mcp server.
+
+Please convert the relative path to absolution path before calling the MCP servers. 
+```
+2. Inference ESM likelihoods
+```markdown
+Can you help intererence esm likelihood for data @examples/case2.1_subtilisin/data.csv with wild-type  @examples/case2.1_subtilisin/wt.fasta using the esm_llh_mcp api in esm mcp server. Please write the output to @examples/case2.1_subtilisin/data.csv_esm_llh.csv
+
+This MCP service finish in seconds.
+Please convert the relative path to absolution path before calling the MCP servers. 
+Please use cuda device 1 where available.
+```
+
+3. Inference ESM-IF likelihoods
+```markdown
+Can you help intererence esm-if likelihood for data @examples/case2.1_subtilisin/data.csv with wild-type sequence  @examples/case2.1_subtilisin/wt.fasta and structure @examples/case2.1_subtilisin/wt_struct.pdb using the esm_if_llh api in esm mcp server. Please write the output to @examples/case2.1_subtilisin/data.csv_esmif_llh.csv
+
+Please convert the relative path to absolution path before calling the MCP servers. 
+Please use cuda device 1 where available.
 ```
 
 ### Available MCP Tools
@@ -102,21 +129,24 @@ The ESM MCP server provides 5 tools that correspond to the 5 notebook scripts:
 
 #### 1. `esm_extract_embeddings_from_csv`
 Extract ESM embeddings from a CSV file containing protein sequences.
-- **Input**: CSV file path, ESM model name, sequence column name
+- **Input**: CSV file path, ESM model name, sequence column name, device (optional)
 - **Output**: FASTA file, embeddings directory (.pt files), statistics
 - **Use case**: First step for supervised learning workflows
+- **Device support**: Supports `cuda`, `cuda:0`, `cuda:1`, `cpu` formats
 
 #### 2. `esm_calculate_llh`
 Calculate ESM log-likelihood for protein mutations (sequence-based, zero-shot).
-- **Input**: CSV with sequences, wild-type FASTA, ESM model name
+- **Input**: CSV with sequences, wild-type FASTA, ESM model name, device (optional)
 - **Output**: CSV with LLH scores, statistics, optional correlation with fitness
 - **Use case**: Zero-shot fitness prediction without training data
+- **Device support**: Supports `cuda`, `cuda:0`, `cuda:1`, `cpu` formats
 
 #### 3. `esm_if_calculate_llh`
 Calculate ESM-IF log-likelihood using protein structure (structure-based, zero-shot).
-- **Input**: CSV with sequences, wild-type FASTA, PDB structure file, chain ID
+- **Input**: CSV with sequences, wild-type FASTA, PDB structure file, chain ID, device (optional)
 - **Output**: CSV with LLH scores, statistics, optional correlation with fitness
 - **Use case**: Zero-shot fitness prediction with structural information
+- **Device support**: Supports `cuda`, `cuda:0`, `cuda:1`, `cpu` formats
 
 #### 4. `esm_train_fitness_model`
 Train regression models on ESM embeddings for fitness prediction (supervised).
@@ -136,7 +166,8 @@ Predict fitness values using pre-trained ESM-based models.
 # 1. Extract embeddings
 result = esm_extract_embeddings_from_csv(
     csv_path="data.csv",
-    model_name="esm2_t33_650M_UR50D"
+    model_name="esm2_t33_650M_UR50D",
+    device="cuda:0"  # Specify GPU device
 )
 
 # 2. Train fitness model
@@ -159,7 +190,8 @@ pred_result = esm_predict_fitness(
 llh_result = esm_calculate_llh(
     data_csv="data.csv",
     wt_fasta="wt.fasta",
-    model_name="esm2_t33_650M_UR50D"
+    model_name="esm2_t33_650M_UR50D",
+    device="cuda:1"  # Use specific GPU
 )
 
 # Alternative: Zero-shot prediction with structure-based LLH
@@ -167,6 +199,15 @@ if_llh_result = esm_if_calculate_llh(
     data_csv="data.csv",
     wt_fasta="wt.fasta",
     pdb_file="wt_struct.pdb",
-    chain="A"
+    chain="A",
+    device="cuda:1"  # Use specific GPU
 )
 ```
+
+### Device Selection
+
+All ESM tools now support explicit device specification:
+- **Format**: `cuda`, `cuda:0`, `cuda:1`, `cpu`
+- **Default**: Uses `cuda` (first available GPU) if not specified
+- **Multi-GPU**: Use `cuda:0`, `cuda:1`, etc. to select specific GPUs
+- **CPU only**: Use `cpu` to force CPU execution

@@ -19,6 +19,8 @@ This MCP Server contains tools extracted from the following tutorial files:
 """
 
 from fastmcp import FastMCP
+import multiprocessing
+multiprocessing.set_start_method('spawn', force=True)
 
 # Import statements (alphabetical order)
 from tools.esm_embeddings import esm_embeddings_mcp
