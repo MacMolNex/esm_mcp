@@ -107,9 +107,12 @@ def extract_embeddings_from_csv(
     embeddings_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nEmbeddings will be saved to: {embeddings_dir}")
 
+    # Use esm-extract from the virtual environment
+    esm_extract_path = Path(__file__).parent.parent / "env" / "bin" / "esm-extract"
+
     # Run esm-extract command
     cmd = [
-        "esm-extract",
+        str(esm_extract_path),
         model_name,
         str(fasta_path),
         str(embeddings_dir),
@@ -123,7 +126,8 @@ def extract_embeddings_from_csv(
     print("This may take a while depending on the number of sequences...\n")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Run without capture_output to print logs directly to command line
+        result = subprocess.run(cmd, text=True, check=True)
 
         print("=" * 80)
         print("SUCCESS: Embeddings extracted successfully!")
@@ -155,9 +159,6 @@ def extract_embeddings_from_csv(
         print(f"  Total sequences:  {len(sequences)}")
         print(f"  Unique sequences: {len(sequences)}")
 
-        if result.stdout:
-            print(f"\nCommand output:\n{result.stdout}")
-
         return response
 
     except subprocess.CalledProcessError as e:
@@ -165,16 +166,10 @@ def extract_embeddings_from_csv(
         print("ERROR: Failed to extract embeddings")
         print("=" * 80)
         print(f"\nError message: {e}")
-        if e.stderr:
-            print(f"\nStderr:\n{e.stderr}")
-        if e.stdout:
-            print(f"\nStdout:\n{e.stdout}")
 
         return {
             "status": "error",
             "error_message": str(e),
-            "stderr": e.stderr,
-            "stdout": e.stdout,
             "csv_path": str(csv_path),
             "fasta_path": str(fasta_path),
             "embeddings_dir": str(embeddings_dir),

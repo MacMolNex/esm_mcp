@@ -120,9 +120,14 @@ def esm_extract_embeddings_from_csv(
     embeddings_dir = output_dir / model_name
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
+    # Get the path to esm-extract in the virtual environment
+    esm_extract_path = PROJECT_ROOT / "env" / "bin" / "esm-extract"
+    if not esm_extract_path.exists():
+        raise FileNotFoundError(f"esm-extract not found at {esm_extract_path}")
+
     # Run esm-extract command
     cmd = [
-        "esm-extract",
+        str(esm_extract_path),
         model_name,
         str(fasta_path),
         str(embeddings_dir),
@@ -130,8 +135,23 @@ def esm_extract_embeddings_from_csv(
         "--include", "mean"
     ]
 
-    # Set up environment for device selection
+    # Set up environment for device selection and SSL certificates
     env = os.environ.copy()
+
+    # Set up SSL certificate paths from conda environment
+    # This fixes SSL certificate verification issues when downloading models
+    try:
+        import certifi
+        cert_path = certifi.where()
+        env['SSL_CERT_FILE'] = cert_path
+        env['REQUESTS_CA_BUNDLE'] = cert_path
+    except ImportError:
+        # If certifi is not available, try to find certificates in the conda env
+        conda_cert_path = PROJECT_ROOT / "env" / "lib" / "python3.10" / "site-packages" / "certifi" / "cacert.pem"
+        if conda_cert_path.exists():
+            env['SSL_CERT_FILE'] = str(conda_cert_path)
+            env['REQUESTS_CA_BUNDLE'] = str(conda_cert_path)
+
     if device is not None:
         if device.startswith('cuda:'):
             # Extract device number from 'cuda:X' format

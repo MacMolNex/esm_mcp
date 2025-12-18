@@ -30,7 +30,7 @@ from tools.esm_predict_fitness import esm_predict_fitness_mcp
 from tools.esm_train_fitness import esm_train_fitness_mcp
 
 # Server definition and mounting
-mcp = FastMCP(name="esm")
+mcp = FastMCP(name="esm_mcp")
 mcp.mount(esm_embeddings_mcp)
 mcp.mount(esm_llh_mcp)
 mcp.mount(esm_if_llh_mcp)

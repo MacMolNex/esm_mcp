@@ -33,6 +33,10 @@ pip install biotite pandas biopython numpy==1.26.4
 # Install dependencies
 pip install -r requirements.txt
 pip install --ignore-installed fastmcp
+
+# Download the needed models (required to call in MCP)
+esm-extract esm2_t33_650M_UR50D examples/sequences.fasta examples/esm2_t33_650M_UR50D --repr_layers 33 --include mean
+esm-extract esm2_t36_3B_UR50D examples/sequences.fasta examples/esm2_t36_3B_UR50D --repr_layers 36 --include mean
 ```
 
 ## Local usage
@@ -101,10 +105,9 @@ fastmcp install gemini-cli tool-mcps/esm_mcp/src/esm_mcp.py --python tool-mcps/e
 ### Call ESM MCP service
 1. Train a ESM-fitness model
 ```markdown
-Can you help train a esm model for data @examples/case2.1_subtilisin/ and save it to 
-@examples/case2.1_subtilisin/esm_fitness using the esm mcp server.
-
+Can you help train a esm model for data @examples/ and save it to @examples/esm_fitness using the esm mcp server?  
 Please convert the relative path to absolution path before calling the MCP servers. 
+Obtain the embeddings if it is not created.
 ```
 2. Inference ESM likelihoods
 ```markdown
