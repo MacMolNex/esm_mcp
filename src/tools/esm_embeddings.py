@@ -9,13 +9,16 @@ and generates ESM embeddings using the esm-extract command.
 """
 
 # Standard imports
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional, TYPE_CHECKING
 import pandas as pd
 import subprocess
 from pathlib import Path
 import os
 from fastmcp import FastMCP
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from queue import QueueManager
 
 # Project structure
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -203,3 +206,80 @@ def esm_extract_embeddings_from_csv(
             "csv_path": str(csv_path),
             "fasta_path": str(fasta_path),
         }
+
+
+# Implementation function for queue-based execution
+def _esm_extract_embeddings_impl(
+    csv_path: str,
+    model_name: str = "esm2_t33_650M_UR50D",
+    seq_column: str = "seq",
+    id_column: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    device: Optional[str] = None,
+) -> dict:
+    """Internal implementation for queue-based execution."""
+    return esm_extract_embeddings_from_csv(
+        csv_path=csv_path,
+        model_name=model_name,
+        seq_column=seq_column,
+        id_column=id_column,
+        output_dir=output_dir,
+        device=device,
+    )
+
+
+def create_esm_embeddings_mcp(queue_manager: "QueueManager") -> FastMCP:
+    """Create MCP instance with queue-wrapped tool.
+
+    Args:
+        queue_manager: Queue manager for job submission
+
+    Returns:
+        FastMCP instance with queue-wrapped esm_extract_embeddings_from_csv tool
+    """
+    from queue.job import Job
+
+    queued_esm_embeddings_mcp = FastMCP(name="esm_embeddings")
+
+    @queued_esm_embeddings_mcp.tool
+    async def esm_extract_embeddings_from_csv(
+        csv_path: Annotated[str, "Path to CSV file containing protein sequences"],
+        model_name: Annotated[
+            Literal[
+                "esm2_t33_650M_UR50D",
+                "esm1v_t33_650M_UR90S_1",
+                "esm1v_t33_650M_UR90S_2",
+                "esm1v_t33_650M_UR90S_3",
+                "esm1v_t33_650M_UR90S_4",
+                "esm1v_t33_650M_UR90S_5",
+                "esm2_t36_3B_UR50D"
+            ],
+            "ESM model name to use for embeddings extraction"
+        ] = "esm2_t33_650M_UR50D",
+        seq_column: Annotated[str, "Column name containing protein sequences"] = "seq",
+        id_column: Annotated[str | None, "Column name containing sequence IDs"] = None,
+        output_dir: Annotated[str | None, "Output directory for embeddings"] = None,
+        device: Annotated[str | None, "Device (ignored - auto-assigned by queue)"] = None,
+    ) -> dict:
+        """
+        Extract ESM embeddings from a CSV file (queue-managed).
+
+        Jobs are queued and executed in FIFO order with automatic GPU assignment.
+        """
+        job = Job(
+            tool_name="esm_extract_embeddings_from_csv",
+            tool_module="tools.esm_embeddings",
+            tool_function="_esm_extract_embeddings_impl",
+            kwargs={
+                "csv_path": csv_path,
+                "model_name": model_name,
+                "seq_column": seq_column,
+                "id_column": id_column,
+                "output_dir": output_dir,
+                # device is injected by worker
+            },
+            requires_gpu=True,
+        )
+        return await queue_manager.submit(job)
+
+    return queued_esm_embeddings_mcp

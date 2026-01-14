@@ -9,7 +9,7 @@ and calculates log-likelihood values for mutations using ESM models.
 """
 
 # Standard imports
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional, TYPE_CHECKING
 import pandas as pd
 import numpy as np
 import torch
@@ -22,7 +22,14 @@ import os
 from fastmcp import FastMCP
 from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
-mp.set_start_method('spawn', force=True)
+
+if TYPE_CHECKING:
+    from queue import QueueManager
+
+try:
+    mp.set_start_method('spawn', force=True)
+except RuntimeError:
+    pass  # Already set
 
 # Natural amino acids
 NATURAL_AA = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
@@ -386,3 +393,89 @@ def esm_calculate_llh(
             "data_csv": str(data_csv),
             "wt_fasta": str(wt_fasta),
         }
+
+
+# Implementation function for queue-based execution
+def _esm_calculate_llh_impl(
+    data_csv: str,
+    wt_fasta: str,
+    model_name: str = "esm2_t33_650M_UR50D",
+    output_col: str = "esm_llh",
+    output_csv: Optional[str] = None,
+    n_proc: Optional[int] = None,
+    device: str = "cuda",
+    fitness_col: Optional[str] = None,
+) -> dict:
+    """Internal implementation for queue-based execution."""
+    return esm_calculate_llh(
+        data_csv=data_csv,
+        wt_fasta=wt_fasta,
+        model_name=model_name,
+        output_col=output_col,
+        output_csv=output_csv,
+        n_proc=n_proc,
+        device=device,
+        fitness_col=fitness_col,
+    )
+
+
+def create_esm_llh_mcp(queue_manager: "QueueManager") -> FastMCP:
+    """Create MCP instance with queue-wrapped tool.
+
+    Args:
+        queue_manager: Queue manager for job submission
+
+    Returns:
+        FastMCP instance with queue-wrapped esm_calculate_llh tool
+    """
+    from queue.job import Job
+
+    queued_esm_llh_mcp = FastMCP(name="esm_llh")
+
+    @queued_esm_llh_mcp.tool
+    async def esm_calculate_llh(
+        data_csv: Annotated[str, "Path to CSV file containing sequences"],
+        wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
+        model_name: Annotated[
+            Literal[
+                "esm2_t33_650M_UR50D",
+                "esm2_t36_3B_UR50D",
+                "esm2_t48_15B_UR50D",
+                "esm1v_t33_650M_UR90S_1",
+                "esm1v_t33_650M_UR90S_2",
+                "esm1v_t33_650M_UR90S_3",
+                "esm1v_t33_650M_UR90S_4",
+                "esm1v_t33_650M_UR90S_5"
+            ],
+            "ESM model name to use"
+        ] = "esm2_t33_650M_UR50D",
+        output_col: Annotated[str, "Name for output column"] = "esm_llh",
+        output_csv: Annotated[str | None, "Output CSV file path"] = None,
+        n_proc: Annotated[int | None, "Number of processes for parallel computation"] = None,
+        device: Annotated[str, "Device (ignored - auto-assigned by queue)"] = "cuda",
+        fitness_col: Annotated[str | None, "Column name containing fitness values"] = None,
+    ) -> dict:
+        """
+        Calculate ESM log-likelihood for protein mutations (queue-managed).
+
+        Jobs are queued and executed in FIFO order with automatic GPU assignment.
+        """
+        job = Job(
+            tool_name="esm_calculate_llh",
+            tool_module="tools.esm_llh",
+            tool_function="_esm_calculate_llh_impl",
+            kwargs={
+                "data_csv": data_csv,
+                "wt_fasta": wt_fasta,
+                "model_name": model_name,
+                "output_col": output_col,
+                "output_csv": output_csv,
+                "n_proc": n_proc,
+                "fitness_col": fitness_col,
+                # device is injected by worker
+            },
+            requires_gpu=True,
+        )
+        return await queue_manager.submit(job)
+
+    return queued_esm_llh_mcp

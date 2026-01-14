@@ -9,7 +9,7 @@ based on how well they fit a given 3D structure.
 """
 
 # Standard imports
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional, TYPE_CHECKING
 import pandas as pd
 import numpy as np
 import torch
@@ -23,6 +23,9 @@ import os
 from fastmcp import FastMCP
 from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
+
+if TYPE_CHECKING:
+    from queue import QueueManager
 
 # MCP server instance
 esm_if_llh_mcp = FastMCP(name="esm_if_llh")
@@ -299,3 +302,81 @@ def esm_if_calculate_llh(
             "wt_fasta": str(wt_fasta),
             "pdb_file": str(pdb_file),
         }
+
+
+# Implementation function for queue-based execution
+def _esm_if_calculate_llh_impl(
+    data_csv: str,
+    wt_fasta: str,
+    pdb_file: str,
+    chain: str = 'A',
+    masked: bool = False,
+    device: str = "cuda",
+    output_col: str = "esmif_llh",
+    output_csv: Optional[str] = None,
+    fitness_col: Optional[str] = None,
+) -> dict:
+    """Internal implementation for queue-based execution."""
+    return esm_if_calculate_llh(
+        data_csv=data_csv,
+        wt_fasta=wt_fasta,
+        pdb_file=pdb_file,
+        chain=chain,
+        masked=masked,
+        device=device,
+        output_col=output_col,
+        output_csv=output_csv,
+        fitness_col=fitness_col,
+    )
+
+
+def create_esm_if_llh_mcp(queue_manager: "QueueManager") -> FastMCP:
+    """Create MCP instance with queue-wrapped tool.
+
+    Args:
+        queue_manager: Queue manager for job submission
+
+    Returns:
+        FastMCP instance with queue-wrapped esm_if_calculate_llh tool
+    """
+    from queue.job import Job
+
+    queued_esm_if_llh_mcp = FastMCP(name="esm_if_llh")
+
+    @queued_esm_if_llh_mcp.tool
+    async def esm_if_calculate_llh(
+        data_csv: Annotated[str, "Path to CSV file containing sequences"],
+        wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
+        pdb_file: Annotated[str, "Path to PDB structure file"],
+        chain: Annotated[str, "Chain ID to use from PDB"] = 'A',
+        masked: Annotated[bool, "Whether to mask mutation positions in structure"] = False,
+        device: Annotated[str, "Device (ignored - auto-assigned by queue)"] = "cuda",
+        output_col: Annotated[str, "Name for output column"] = "esmif_llh",
+        output_csv: Annotated[str | None, "Output CSV file path"] = None,
+        fitness_col: Annotated[str | None, "Column name containing fitness values"] = None,
+    ) -> dict:
+        """
+        Calculate ESM-IF log-likelihood for protein sequences (queue-managed).
+
+        Jobs are queued and executed in FIFO order with automatic GPU assignment.
+        """
+        job = Job(
+            tool_name="esm_if_calculate_llh",
+            tool_module="tools.esm_if_llh",
+            tool_function="_esm_if_calculate_llh_impl",
+            kwargs={
+                "data_csv": data_csv,
+                "wt_fasta": wt_fasta,
+                "pdb_file": pdb_file,
+                "chain": chain,
+                "masked": masked,
+                "output_col": output_col,
+                "output_csv": output_csv,
+                "fitness_col": fitness_col,
+                # device is injected by worker
+            },
+            requires_gpu=True,
+        )
+        return await queue_manager.submit(job)
+
+    return queued_esm_if_llh_mcp
