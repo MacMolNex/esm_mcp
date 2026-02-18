@@ -39,39 +39,15 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 esm_embeddings_mcp = FastMCP(name="esm_embeddings")
 
 
-@esm_embeddings_mcp.tool
-def esm_extract_embeddings_from_csv(
-    csv_path: Annotated[str, "Path to CSV file containing protein sequences in 'seq' column"],
-    model_name: Annotated[
-        Literal[
-            "esm2_t33_650M_UR50D",
-            "esm1v_t33_650M_UR90S_1",
-            "esm1v_t33_650M_UR90S_2",
-            "esm1v_t33_650M_UR90S_3",
-            "esm1v_t33_650M_UR90S_4",
-            "esm1v_t33_650M_UR90S_5",
-            "esm2_t36_3B_UR50D"
-        ],
-        "ESM model name to use for embeddings extraction"
-    ] = "esm2_t33_650M_UR50D",
-    seq_column: Annotated[str, "Column name containing protein sequences"] = "seq",
-    id_column: Annotated[str | None, "Column name containing sequence IDs. If None, generates seq_0, seq_1, etc."] = None,
-    output_dir: Annotated[str | None, "Output directory for embeddings. If None, uses directory of CSV file"] = None,
-    device: Annotated[str | None, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu'). If None, uses default CUDA device"] = None,
+def _esm_extract_embeddings_core(
+    csv_path,
+    model_name="esm2_t33_650M_UR50D",
+    seq_column="seq",
+    id_column=None,
+    output_dir=None,
+    device=None,
 ) -> dict:
-    """
-    Extract ESM embeddings from a CSV file containing protein sequences.
-
-    This tool:
-    1. Reads a CSV file with protein sequences
-    2. Extracts unique sequences from the specified column
-    3. Creates a FASTA file with sequence IDs (seq_0, seq_1, etc. or from id_column)
-    4. Runs esm-extract to generate embeddings
-    5. Returns paths to generated files and embedding statistics
-
-    Input: CSV file path with protein sequences
-    Output: Dictionary with FASTA path, embeddings directory, and metadata
-    """
+    """Core implementation for ESM embeddings extraction."""
     # Validate CSV path
     csv_path = Path(csv_path)
     if not csv_path.exists():
@@ -140,6 +116,7 @@ def esm_extract_embeddings_from_csv(
 
     # Set up environment for device selection and SSL certificates
     env = os.environ.copy()
+    env['MKL_THREADING_LAYER'] = 'GNU'
 
     # Set up SSL certificate paths from conda environment
     # This fixes SSL certificate verification issues when downloading models
@@ -156,12 +133,20 @@ def esm_extract_embeddings_from_csv(
             env['REQUESTS_CA_BUNDLE'] = str(conda_cert_path)
 
     if device is not None:
-        if device.startswith('cuda:'):
-            # Extract device number from 'cuda:X' format
-            device_num = device.split(':')[1]
-            env['CUDA_VISIBLE_DEVICES'] = device_num
-        elif device == 'cpu':
+        if device == 'cpu':
             env['CUDA_VISIBLE_DEVICES'] = ''
+        elif device.startswith('cuda:'):
+            # Only override CUDA_VISIBLE_DEVICES if not already set by queue worker.
+            # The queue worker sets CUDA_VISIBLE_DEVICES to the real GPU index before
+            # spawning, then remaps it to cuda:0. Overriding here with the remapped
+            # index (always 0) would route multi-GPU jobs to the wrong device.
+            if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+                device_num = device.split(':')[1]
+                env['CUDA_VISIBLE_DEVICES'] = device_num
+
+    cuda_vis = env.get('CUDA_VISIBLE_DEVICES', 'not set')
+    print(f"[ESM Embeddings] Running esm-extract: model={model_name}, "
+          f"sequences={len(sequences)}, CUDA_VISIBLE_DEVICES={cuda_vis}", flush=True)
 
     try:
         result = subprocess.run(
@@ -171,6 +156,10 @@ def esm_extract_embeddings_from_csv(
             check=True,
             env=env
         )
+
+        # Log GPU usage from subprocess stdout
+        for line in result.stdout.splitlines():
+            print(f"[ESM Embeddings] {line}", flush=True)
 
         # Prepare response
         response = {
@@ -190,6 +179,9 @@ def esm_extract_embeddings_from_csv(
         return response
 
     except subprocess.CalledProcessError as e:
+        print(f"[ESM Embeddings] esm-extract failed (exit code {e.returncode})", flush=True)
+        if e.stderr:
+            print(f"[ESM Embeddings] stderr: {e.stderr[:500]}", flush=True)
         return {
             "status": "error",
             "error_message": str(e),
@@ -200,12 +192,56 @@ def esm_extract_embeddings_from_csv(
             "embeddings_dir": str(embeddings_dir),
         }
     except Exception as e:
+        print(f"[ESM Embeddings] Error: {e}", flush=True)
         return {
             "status": "error",
             "error_message": str(e),
             "csv_path": str(csv_path),
             "fasta_path": str(fasta_path),
         }
+
+
+@esm_embeddings_mcp.tool
+def esm_extract_embeddings_from_csv(
+    csv_path: Annotated[str, "Path to CSV file containing protein sequences in 'seq' column"],
+    model_name: Annotated[
+        Literal[
+            "esm2_t33_650M_UR50D",
+            "esm1v_t33_650M_UR90S_1",
+            "esm1v_t33_650M_UR90S_2",
+            "esm1v_t33_650M_UR90S_3",
+            "esm1v_t33_650M_UR90S_4",
+            "esm1v_t33_650M_UR90S_5",
+            "esm2_t36_3B_UR50D"
+        ],
+        "ESM model name to use for embeddings extraction"
+    ] = "esm2_t33_650M_UR50D",
+    seq_column: Annotated[str, "Column name containing protein sequences"] = "seq",
+    id_column: Annotated[str | None, "Column name containing sequence IDs. If None, generates seq_0, seq_1, etc."] = None,
+    output_dir: Annotated[str | None, "Output directory for embeddings. If None, uses directory of CSV file"] = None,
+    device: Annotated[str | None, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu'). If None, uses default CUDA device"] = None,
+) -> dict:
+    """
+    Extract ESM embeddings from a CSV file containing protein sequences.
+
+    This tool:
+    1. Reads a CSV file with protein sequences
+    2. Extracts unique sequences from the specified column
+    3. Creates a FASTA file with sequence IDs (seq_0, seq_1, etc. or from id_column)
+    4. Runs esm-extract to generate embeddings
+    5. Returns paths to generated files and embedding statistics
+
+    Input: CSV file path with protein sequences
+    Output: Dictionary with FASTA path, embeddings directory, and metadata
+    """
+    return _esm_extract_embeddings_core(
+        csv_path=csv_path,
+        model_name=model_name,
+        seq_column=seq_column,
+        id_column=id_column,
+        output_dir=output_dir,
+        device=device,
+    )
 
 
 # Implementation function for queue-based execution
@@ -218,7 +254,7 @@ def _esm_extract_embeddings_impl(
     device: Optional[str] = None,
 ) -> dict:
     """Internal implementation for queue-based execution."""
-    return esm_extract_embeddings_from_csv(
+    return _esm_extract_embeddings_core(
         csv_path=csv_path,
         model_name=model_name,
         seq_column=seq_column,

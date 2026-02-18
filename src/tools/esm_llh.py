@@ -208,42 +208,17 @@ def calculate_llh_batch(mutations, df_mut_probs, n_proc=None):
     return np.array(llhs)
 
 
-@esm_llh_mcp.tool
-def esm_calculate_llh(
-    data_csv: Annotated[str, "Path to CSV file containing sequences"],
-    wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
-    model_name: Annotated[
-        Literal[
-            "esm2_t33_650M_UR50D",
-            "esm2_t36_3B_UR50D",
-            "esm2_t48_15B_UR50D",
-            "esm1v_t33_650M_UR90S_1",
-            "esm1v_t33_650M_UR90S_2",
-            "esm1v_t33_650M_UR90S_3",
-            "esm1v_t33_650M_UR90S_4",
-            "esm1v_t33_650M_UR90S_5"
-        ],
-        "ESM model name to use"
-    ] = "esm2_t33_650M_UR50D",
-    output_col: Annotated[str, "Name for output column"] = "esm_llh",
-    output_csv: Annotated[str | None, "Output CSV file path. If None, uses <input_csv>_esm_llh.csv"] = None,
-    n_proc: Annotated[int | None, "Number of processes for parallel computation"] = None,
-    device: Annotated[str, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu')"] = "cuda",
-    fitness_col: Annotated[str | None, "Column name containing fitness values for correlation evaluation"] = None,
+def _esm_calculate_llh_core(
+    data_csv,
+    wt_fasta,
+    model_name="esm2_t33_650M_UR50D",
+    output_col="esm_llh",
+    output_csv=None,
+    n_proc=None,
+    device="cuda",
+    fitness_col=None,
 ) -> dict:
-    """
-    Calculate ESM log-likelihood for protein mutations.
-
-    This tool:
-    1. Reads CSV file with 'seq' column and wild-type FASTA
-    2. Derives mutations by comparing sequences to wild-type
-    3. Calculates mutation probabilities using ESM model
-    4. Computes log-likelihood for each variant
-    5. Returns results with optional correlation statistics
-
-    Input: CSV with sequences, wild-type FASTA, model parameters
-    Output: Dictionary with results path, statistics, and correlation metrics
-    """
+    """Core implementation for ESM log-likelihood calculation."""
     try:
         data_csv = Path(data_csv)
         wt_fasta = Path(wt_fasta)
@@ -395,6 +370,54 @@ def esm_calculate_llh(
         }
 
 
+@esm_llh_mcp.tool
+def esm_calculate_llh(
+    data_csv: Annotated[str, "Path to CSV file containing sequences"],
+    wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
+    model_name: Annotated[
+        Literal[
+            "esm2_t33_650M_UR50D",
+            "esm2_t36_3B_UR50D",
+            "esm2_t48_15B_UR50D",
+            "esm1v_t33_650M_UR90S_1",
+            "esm1v_t33_650M_UR90S_2",
+            "esm1v_t33_650M_UR90S_3",
+            "esm1v_t33_650M_UR90S_4",
+            "esm1v_t33_650M_UR90S_5"
+        ],
+        "ESM model name to use"
+    ] = "esm2_t33_650M_UR50D",
+    output_col: Annotated[str, "Name for output column"] = "esm_llh",
+    output_csv: Annotated[str | None, "Output CSV file path. If None, uses <input_csv>_esm_llh.csv"] = None,
+    n_proc: Annotated[int | None, "Number of processes for parallel computation"] = None,
+    device: Annotated[str, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu')"] = "cuda",
+    fitness_col: Annotated[str | None, "Column name containing fitness values for correlation evaluation"] = None,
+) -> dict:
+    """
+    Calculate ESM log-likelihood for protein mutations.
+
+    This tool:
+    1. Reads CSV file with 'seq' column and wild-type FASTA
+    2. Derives mutations by comparing sequences to wild-type
+    3. Calculates mutation probabilities using ESM model
+    4. Computes log-likelihood for each variant
+    5. Returns results with optional correlation statistics
+
+    Input: CSV with sequences, wild-type FASTA, model parameters
+    Output: Dictionary with results path, statistics, and correlation metrics
+    """
+    return _esm_calculate_llh_core(
+        data_csv=data_csv,
+        wt_fasta=wt_fasta,
+        model_name=model_name,
+        output_col=output_col,
+        output_csv=output_csv,
+        n_proc=n_proc,
+        device=device,
+        fitness_col=fitness_col,
+    )
+
+
 # Implementation function for queue-based execution
 def _esm_calculate_llh_impl(
     data_csv: str,
@@ -407,7 +430,7 @@ def _esm_calculate_llh_impl(
     fitness_col: Optional[str] = None,
 ) -> dict:
     """Internal implementation for queue-based execution."""
-    return esm_calculate_llh(
+    return _esm_calculate_llh_core(
         data_csv=data_csv,
         wt_fasta=wt_fasta,
         model_name=model_name,

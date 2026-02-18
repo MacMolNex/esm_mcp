@@ -104,31 +104,18 @@ def calculate_sequence_llh(seq, coords, wt_seq, native_seq, mutation_positions,
     return ll_seq
 
 
-@esm_if_llh_mcp.tool
-def esm_if_calculate_llh(
-    data_csv: Annotated[str, "Path to CSV file containing sequences"],
-    wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
-    pdb_file: Annotated[str, "Path to PDB structure file"],
-    chain: Annotated[str, "Chain ID to use from PDB"] = 'A',
-    masked: Annotated[bool, "Whether to mask mutation positions in structure"] = False,
-    device: Annotated[str, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu')"] = "cuda",
-    output_col: Annotated[str, "Name for output column"] = "esmif_llh",
-    output_csv: Annotated[str | None, "Output CSV file path. If None, uses <input_csv>_esmif_llh.csv"] = None,
-    fitness_col: Annotated[str | None, "Column name containing fitness values for correlation evaluation"] = None,
+def _esm_if_calculate_llh_core(
+    data_csv,
+    wt_fasta,
+    pdb_file,
+    chain='A',
+    masked=False,
+    device="cuda",
+    output_col="esmif_llh",
+    output_csv=None,
+    fitness_col=None,
 ) -> dict:
-    """
-    Calculate ESM-IF log-likelihood for protein sequences using structure.
-
-    This tool:
-    1. Reads CSV file with 'seq' column, wild-type FASTA, and PDB structure
-    2. Loads ESM-IF model (Inverse Folding)
-    3. Derives mutations by comparing sequences to wild-type
-    4. Calculates structure-based log-likelihood for each variant
-    5. Returns results with optional correlation statistics
-
-    Input: CSV with sequences, wild-type FASTA, PDB structure, parameters
-    Output: Dictionary with results path, statistics, and correlation metrics
-    """
+    """Core implementation for ESM-IF log-likelihood calculation."""
     try:
         data_csv = Path(data_csv)
         wt_fasta = Path(wt_fasta)
@@ -304,6 +291,44 @@ def esm_if_calculate_llh(
         }
 
 
+@esm_if_llh_mcp.tool
+def esm_if_calculate_llh(
+    data_csv: Annotated[str, "Path to CSV file containing sequences"],
+    wt_fasta: Annotated[str, "Path to wild-type FASTA file"],
+    pdb_file: Annotated[str, "Path to PDB structure file"],
+    chain: Annotated[str, "Chain ID to use from PDB"] = 'A',
+    masked: Annotated[bool, "Whether to mask mutation positions in structure"] = False,
+    device: Annotated[str, "Device to use (e.g., 'cuda', 'cuda:0', 'cuda:1', 'cpu')"] = "cuda",
+    output_col: Annotated[str, "Name for output column"] = "esmif_llh",
+    output_csv: Annotated[str | None, "Output CSV file path. If None, uses <input_csv>_esmif_llh.csv"] = None,
+    fitness_col: Annotated[str | None, "Column name containing fitness values for correlation evaluation"] = None,
+) -> dict:
+    """
+    Calculate ESM-IF log-likelihood for protein sequences using structure.
+
+    This tool:
+    1. Reads CSV file with 'seq' column, wild-type FASTA, and PDB structure
+    2. Loads ESM-IF model (Inverse Folding)
+    3. Derives mutations by comparing sequences to wild-type
+    4. Calculates structure-based log-likelihood for each variant
+    5. Returns results with optional correlation statistics
+
+    Input: CSV with sequences, wild-type FASTA, PDB structure, parameters
+    Output: Dictionary with results path, statistics, and correlation metrics
+    """
+    return _esm_if_calculate_llh_core(
+        data_csv=data_csv,
+        wt_fasta=wt_fasta,
+        pdb_file=pdb_file,
+        chain=chain,
+        masked=masked,
+        device=device,
+        output_col=output_col,
+        output_csv=output_csv,
+        fitness_col=fitness_col,
+    )
+
+
 # Implementation function for queue-based execution
 def _esm_if_calculate_llh_impl(
     data_csv: str,
@@ -317,7 +342,7 @@ def _esm_if_calculate_llh_impl(
     fitness_col: Optional[str] = None,
 ) -> dict:
     """Internal implementation for queue-based execution."""
-    return esm_if_calculate_llh(
+    return _esm_if_calculate_llh_core(
         data_csv=data_csv,
         wt_fasta=wt_fasta,
         pdb_file=pdb_file,
