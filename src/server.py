@@ -35,7 +35,7 @@ except RuntimeError:
     pass  # Already set
 
 # Import queue system
-from queue import QueueConfig, QueueManager
+from job_queue import QueueConfig, QueueManager
 
 # Initialize queue manager with configuration from environment
 config = QueueConfig.from_env()

@@ -18,7 +18,7 @@ from fastmcp import FastMCP
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from queue import QueueManager
+    from job_queue import QueueManager
 
 # Project structure
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
@@ -237,7 +237,7 @@ def create_esm_embeddings_mcp(queue_manager: "QueueManager") -> FastMCP:
     Returns:
         FastMCP instance with queue-wrapped esm_extract_embeddings_from_csv tool
     """
-    from queue.job import Job
+    from job_queue.job import Job
 
     queued_esm_embeddings_mcp = FastMCP(name="esm_embeddings")
 

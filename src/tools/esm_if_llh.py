@@ -25,7 +25,7 @@ from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
 
 if TYPE_CHECKING:
-    from queue import QueueManager
+    from job_queue import QueueManager
 
 # MCP server instance
 esm_if_llh_mcp = FastMCP(name="esm_if_llh")
@@ -339,7 +339,7 @@ def create_esm_if_llh_mcp(queue_manager: "QueueManager") -> FastMCP:
     Returns:
         FastMCP instance with queue-wrapped esm_if_calculate_llh tool
     """
-    from queue.job import Job
+    from job_queue.job import Job
 
     queued_esm_if_llh_mcp = FastMCP(name="esm_if_llh")
 

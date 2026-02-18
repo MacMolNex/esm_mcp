@@ -24,7 +24,7 @@ from datetime import datetime
 from scipy.stats import spearmanr, pearsonr
 
 if TYPE_CHECKING:
-    from queue import QueueManager
+    from job_queue import QueueManager
 
 try:
     mp.set_start_method('spawn', force=True)
@@ -428,7 +428,7 @@ def create_esm_llh_mcp(queue_manager: "QueueManager") -> FastMCP:
     Returns:
         FastMCP instance with queue-wrapped esm_calculate_llh tool
     """
-    from queue.job import Job
+    from job_queue.job import Job
 
     queued_esm_llh_mcp = FastMCP(name="esm_llh")
 

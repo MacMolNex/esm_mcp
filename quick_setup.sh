@@ -63,17 +63,20 @@ check_conda() {
 # Parse arguments
 SKIP_ENV=false
 SKIP_REPO=false
+SKIP_ESMFOLD=true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-env) SKIP_ENV=true; shift ;;
         --skip-repo) SKIP_REPO=true; shift ;;
+        --skip-esmfold) SKIP_ESMFOLD=true; shift ;;
         -h|--help)
             echo "Usage: ./quick_setup.sh [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --skip-env        Skip conda environment creation"
             echo "  --skip-repo       Skip cloning ESM repository"
+            echo "  --skip-esmfold    Skip ESMFold environment (not needed for embeddings)"
             echo "  -h, --help        Show this help message"
             exit 0
             ;;
@@ -95,10 +98,32 @@ success "Prerequisites check passed"
 echo ""
 echo -e "${BLUE}Step 1: Setting up main conda environment${NC}"
 
+# Fast path: use pre-packaged conda env from GitHub Releases
+PACKED_ENV_URL="${PACKED_ENV_URL:-}"
+PACKED_ENV_TAG="${PACKED_ENV_TAG:-envs-v1}"
+PACKED_ENV_BASE="https://github.com/charlesxu90/ProteinMCP/releases/download/${PACKED_ENV_TAG}"
+
 if [ "$SKIP_ENV" = true ]; then
     info "Skipping environment creation (--skip-env)"
 elif [ -d "$ENV_DIR" ] && [ -f "$ENV_DIR/bin/python" ]; then
     info "Environment already exists at: $ENV_DIR"
+elif [ "${USE_PACKED_ENVS:-}" = "1" ] || [ -n "$PACKED_ENV_URL" ]; then
+    # Download and extract pre-packaged conda environment
+    PACKED_ENV_URL="${PACKED_ENV_URL:-${PACKED_ENV_BASE}/esm_mcp-env.tar.gz}"
+    info "Downloading pre-packaged environment from ${PACKED_ENV_URL}..."
+    mkdir -p "$ENV_DIR"
+    if wget -qO- "$PACKED_ENV_URL" | tar xzf - -C "$ENV_DIR"; then
+        source "$ENV_DIR/bin/activate"
+        conda-unpack 2>/dev/null || true
+        success "Pre-packaged environment ready"
+        SKIP_ENV=true
+        SKIP_ESMFOLD=true  # Pre-packaged env doesn't include ESMFold
+    else
+        warn "Failed to download pre-packaged env, falling back to conda create..."
+        rm -rf "$ENV_DIR"
+        info "Creating conda environment with Python ${PYTHON_VERSION}..."
+        $CONDA_CMD create -p "$ENV_DIR" python=${PYTHON_VERSION} pip -y
+    fi
 else
     info "Creating conda environment with Python ${PYTHON_VERSION}..."
     $CONDA_CMD create -p "$ENV_DIR" python=${PYTHON_VERSION} pip -y
@@ -115,7 +140,7 @@ elif [ -d "$REPO_DIR/esm" ]; then
 else
     info "Cloning ESM repository..."
     mkdir -p "$REPO_DIR"
-    git clone "$ESM_REPO" "$REPO_DIR/esm"
+    git clone --depth 1 "$ESM_REPO" "$REPO_DIR/esm"
     success "Repository cloned"
 fi
 
@@ -129,8 +154,10 @@ else
     info "Installing MCP dependencies to main env..."
     "${ENV_DIR}/bin/pip" install fastmcp loguru
 
-    # Create ESMFold environment if environment.yml exists
-    if [ -f "$REPO_DIR/esm/environment.yml" ]; then
+    # Create ESMFold environment if environment.yml exists (skip with --skip-esmfold)
+    if [ "$SKIP_ESMFOLD" = true ]; then
+        info "Skipping ESMFold environment (--skip-esmfold)"
+    elif [ -f "$REPO_DIR/esm/environment.yml" ]; then
         echo ""
         echo -e "${BLUE}Step 3b: Setting up ESMFold environment${NC}"
         if [ -d "$ENV_ESMFOLD_DIR" ] && [ -f "$ENV_ESMFOLD_DIR/bin/python" ]; then
