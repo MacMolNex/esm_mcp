@@ -43,6 +43,69 @@ jobs:
           ./env/bin/pip install git+https://github.com/facebookresearch/esm.git
           ./env/bin/pip install --ignore-installed fastmcp
 
+      - name: Slim environment before packing
+        shell: bash -el {0}
+        run: |
+          ENV=./env
+          echo "=== Pre-cleanup env size ==="
+          du -sh $ENV
+
+          # 1. Remove duplicate CUDA libs from env/lib/ (torch uses nvidia/*/lib/ copies)
+          rm -f $ENV/lib/libcublas* $ENV/lib/libcufft* $ENV/lib/libcusolver* \
+                $ENV/lib/libcusparse* $ENV/lib/libnvrtc*
+
+          # 2. Remove triton (only needed for torch.compile, ESM uses eager mode)
+          rm -rf $ENV/lib/python3.10/site-packages/triton
+
+          # 3. Remove unused MKL variants (torch uses mkl_rt → core + intel_thread only)
+          rm -f $ENV/lib/libmkl_pgi* $ENV/lib/libmkl_tbb* $ENV/lib/libmkl_gnu* \
+                $ENV/lib/libmkl_sequential* $ENV/lib/libmkl_scalapack* \
+                $ENV/lib/libmkl_blacs* $ENV/lib/libmkl*ilp64*
+
+          # 4. Remove NPP libraries (image processing, unused by ESM)
+          rm -f $ENV/lib/libnpp*
+          rm -rf $ENV/lib/python3.10/site-packages/nvidia/npp
+
+          # 5. Remove __pycache__ directories (regenerated on first import)
+          find $ENV -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+
+          # 6. Remove nccl (multi-GPU distributed communication, not needed)
+          rm -rf $ENV/lib/python3.10/site-packages/nvidia/nccl
+          rm -f $ENV/lib/libnccl*
+
+          # 7. Remove CUDA targets/ directory (headers/stubs, not runtime)
+          find $ENV -type d -name targets -path "*/nvidia/*" -exec rm -rf {} + 2>/dev/null || true
+
+          # 8. Remove test directories in packages
+          find $ENV/lib/python3.10/site-packages -type d -name tests -exec rm -rf {} + 2>/dev/null || true
+          find $ENV/lib/python3.10/site-packages -type d -name test -exec rm -rf {} + 2>/dev/null || true
+
+          # 9. Remove profiling libraries
+          rm -rf $ENV/lib/python3.10/site-packages/nvidia/cuda_cupti
+          rm -f $ENV/lib/libnvperf* $ENV/lib/libcupti_static*
+
+          # 10. Remove torch C++ headers (only for building extensions)
+          rm -rf $ENV/lib/python3.10/site-packages/torch/include
+
+          # 11. Remove pip, setuptools, wheel (not needed in packed runtime env)
+          rm -rf $ENV/lib/python3.10/site-packages/pip \
+                 $ENV/lib/python3.10/site-packages/setuptools \
+                 $ENV/lib/python3.10/site-packages/wheel \
+                 $ENV/lib/python3.10/site-packages/_distutils_hack
+
+          # 12. Remove torchaudio (not used by ESM)
+          rm -rf $ENV/lib/python3.10/site-packages/torchaudio
+
+          # 13. Remove .dist-info directories (package metadata, not runtime)
+          find $ENV/lib/python3.10/site-packages -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+
+          # 14. Strip debug symbols from shared libraries
+          find $ENV -name "*.so" -exec strip --strip-debug {} + 2>/dev/null || true
+          find $ENV -name "*.so.*" -exec strip --strip-debug {} + 2>/dev/null || true
+
+          echo "=== Post-cleanup env size ==="
+          du -sh $ENV
+
       - name: Pack environment
         shell: bash -el {0}
         run: |
