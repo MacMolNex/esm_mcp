@@ -110,7 +110,7 @@ jobs:
         shell: bash -el {0}
         run: |
           conda install -n base conda-pack -y
-          $(conda info --base)/bin/conda-pack -p ./env -o esm_mcp-env.tar.gz --ignore-editable-packages
+          $(conda info --base)/bin/conda-pack -p ./env -o esm_mcp-env.tar.gz --ignore-editable-packages --force
 
       - name: Determine release tag
         id: tag
