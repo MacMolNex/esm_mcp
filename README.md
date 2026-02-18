@@ -17,41 +17,60 @@ Note: ESM-Fold MCP is created in another mcp server called `esmfold_mcp` as it h
 
 ## Installation
 
-### Quick Setup (Recommended)
+### Option 1: Docker (Recommended)
 
-Run the automated setup script:
+The easiest way to get started. A pre-built image is published to GHCR on every push to `main`.
 
 ```bash
+# Pull the latest image
+docker pull ghcr.io/macromnex/esm_mcp:latest
+
+# Run the MCP server
+docker run --gpus all -p 8000:8000 ghcr.io/macromnex/esm_mcp:latest
+
+# Or build locally
+docker build -t esm_mcp .
+docker run --gpus all -p 8000:8000 esm_mcp
+```
+
+Register in Claude Code:
+```bash
+claude mcp add esm -- docker run --gpus all -i --rm ghcr.io/macromnex/esm_mcp:latest
+```
+
+### Option 2: Clone + Download Pre-built Environment (for Colab / fast setup)
+
+Downloads a pre-packaged conda environment from GitHub Releases instead of building from scratch. Useful for Google Colab or machines without conda configured.
+
+```bash
+git clone https://github.com/MacromNex/esm_mcp.git
+cd esm_mcp
+USE_PACKED_ENVS=1 bash quick_setup.sh
+```
+
+For Google Colab:
+```python
+import subprocess, os
+subprocess.run(["git", "clone", "https://github.com/MacromNex/esm_mcp.git"])
+os.chdir("esm_mcp")
+subprocess.run(["bash", "-c", "USE_PACKED_ENVS=1 bash quick_setup.sh"])
+```
+
+### Option 3: Clone + Create Environment from Scratch
+
+Full setup that creates a fresh conda environment and installs all dependencies. Requires conda or mamba.
+
+```bash
+git clone https://github.com/MacromNex/esm_mcp.git
 cd esm_mcp
 bash quick_setup.sh
 ```
 
 The script will create the conda environment, install all dependencies, clone the ESM repository, and display the Claude Code configuration. See `quick_setup.sh --help` for options like `--skip-env` or `--skip-repo`.
 
-### Manual Installation (Alternative)
-
-If you prefer manual installation or need to customize the setup:
-
+After setup, register in Claude Code:
 ```bash
-# Create and activate virtual environment
-mamba env create -p ./env python=3.10 pip -y
-mamba activate ./env
-pip install torch==2.4.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-pip install biotite==0.36.1
-pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv \
-    -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
-pip install torch_geometric
-
-pip install git+https://github.com/facebookresearch/esm.git
-pip install biotite pandas biopython numpy==1.26.4
-
-# Install dependencies
-pip install -r requirements.txt
-pip install --ignore-installed fastmcp
-
-# Download the needed models (required to call in MCP)
-esm-extract esm2_t33_650M_UR50D examples/sequences.fasta examples/esm2_t33_650M_UR50D --repr_layers 33 --include mean
-esm-extract esm2_t36_3B_UR50D examples/sequences.fasta examples/esm2_t36_3B_UR50D --repr_layers 36 --include mean
+claude mcp add esm -- ./env/bin/python src/server.py
 ```
 
 ## Local usage
