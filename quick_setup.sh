@@ -109,10 +109,45 @@ elif [ -d "$ENV_DIR" ] && [ -f "$ENV_DIR/bin/python" ]; then
     info "Environment already exists at: $ENV_DIR"
 elif [ "${USE_PACKED_ENVS:-}" = "1" ] || [ -n "$PACKED_ENV_URL" ]; then
     # Download and extract pre-packaged conda environment
-    PACKED_ENV_URL="${PACKED_ENV_URL:-${PACKED_ENV_BASE}/esm_mcp-env.tar.gz}"
-    info "Downloading pre-packaged environment from ${PACKED_ENV_URL}..."
     mkdir -p "$ENV_DIR"
-    if wget -qO- "$PACKED_ENV_URL" | tar xzf - -C "$ENV_DIR"; then
+    PACKED_OK=false
+
+    if [ -n "$PACKED_ENV_URL" ]; then
+        # User-specified URL: single file
+        info "Downloading pre-packaged environment from ${PACKED_ENV_URL}..."
+        if wget -qO- "$PACKED_ENV_URL" | tar xzf - -C "$ENV_DIR"; then
+            PACKED_OK=true
+        fi
+    else
+        # Try single file first, then split parts
+        SINGLE_URL="${PACKED_ENV_BASE}/esm_mcp-env.tar.gz"
+        info "Downloading pre-packaged environment from ${SINGLE_URL}..."
+        if wget -qO- "$SINGLE_URL" | tar xzf - -C "$ENV_DIR" 2>/dev/null; then
+            PACKED_OK=true
+        else
+            # Try split parts (part-aa, part-ab, ...)
+            info "Single file not found, trying split parts..."
+            TMPDIR_PARTS=$(mktemp -d)
+            PART_OK=true
+            for SUFFIX in aa ab ac ad ae; do
+                PART_URL="${PACKED_ENV_BASE}/esm_mcp-env.tar.gz.part-${SUFFIX}"
+                if wget -q -O "${TMPDIR_PARTS}/part-${SUFFIX}" "$PART_URL" 2>/dev/null; then
+                    info "Downloaded part-${SUFFIX}"
+                else
+                    break
+                fi
+            done
+            if ls "${TMPDIR_PARTS}"/part-* >/dev/null 2>&1; then
+                info "Reassembling and extracting split archive..."
+                if cat "${TMPDIR_PARTS}"/part-* | tar xzf - -C "$ENV_DIR"; then
+                    PACKED_OK=true
+                fi
+            fi
+            rm -rf "$TMPDIR_PARTS"
+        fi
+    fi
+
+    if [ "$PACKED_OK" = true ]; then
         source "$ENV_DIR/bin/activate"
         conda-unpack 2>/dev/null || true
         success "Pre-packaged environment ready"

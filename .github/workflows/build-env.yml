@@ -106,6 +106,24 @@ jobs:
           conda install -n base conda-pack -y
           $(conda info --base)/bin/conda-pack -p ./env -o esm_mcp-env.tar.gz --ignore-editable-packages --ignore-missing-files
 
+      - name: Split archive if over 1.9GB
+        shell: bash -el {0}
+        run: |
+          SIZE=$(stat --format=%s esm_mcp-env.tar.gz)
+          echo "Archive size: $((SIZE / 1024 / 1024)) MB"
+          LIMIT=$((1900 * 1024 * 1024))  # 1.9GB
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "Archive exceeds 1.9GB, splitting..."
+            split -b 1900m esm_mcp-env.tar.gz esm_mcp-env.tar.gz.part-
+            ls -lh esm_mcp-env.tar.gz.part-*
+            rm esm_mcp-env.tar.gz
+            echo "split=true" >> $GITHUB_OUTPUT
+          else
+            echo "Archive fits in single file"
+            echo "split=false" >> $GITHUB_OUTPUT
+          fi
+        id: split
+
       - name: Determine release tag
         id: tag
         run: |
@@ -123,19 +141,11 @@ jobs:
           body: |
             Pre-packaged conda environment for `esm_mcp`.
 
-            **Usage in quick_setup.sh:**
+            **Usage:**
             ```bash
             USE_PACKED_ENVS=1 bash quick_setup.sh
             ```
-
-            **Usage in Google Colab:**
-            ```python
-            import os, subprocess
-            url = "https://github.com/<owner>/<repo>/releases/download/${{ steps.tag.outputs.tag }}/esm_mcp-env.tar.gz"
-            subprocess.run(["wget", "-q", url])
-            os.makedirs("esm_mcp/env", exist_ok=True)
-            subprocess.run(["tar", "xzf", "esm_mcp-env.tar.gz", "-C", "esm_mcp/env"])
-            subprocess.run(["bash", "-c", "source esm_mcp/env/bin/activate && conda-unpack"])
-            ```
-          files: esm_mcp-env.tar.gz
-          fail_on_unmatched_files: true
+          files: |
+            esm_mcp-env.tar.gz
+            esm_mcp-env.tar.gz.part-*
+          fail_on_unmatched_files: false
