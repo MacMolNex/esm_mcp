@@ -66,8 +66,8 @@ jobs:
           rm -f $ENV/lib/libnpp*
           rm -rf $ENV/lib/python3.10/site-packages/nvidia/npp
 
-          # 5. Remove __pycache__ directories (regenerated on first import)
-          find $ENV -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+          # 5. Remove __pycache__ in site-packages (skip stdlib ones tracked by conda)
+          find $ENV/lib/python3.10/site-packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
           # 6. Remove nccl (multi-GPU distributed communication, not needed)
           rm -rf $ENV/lib/python3.10/site-packages/nvidia/nccl
@@ -87,21 +87,15 @@ jobs:
           # 10. Remove torch C++ headers (only for building extensions)
           rm -rf $ENV/lib/python3.10/site-packages/torch/include
 
-          # 11. Remove pip, setuptools, wheel (not needed in packed runtime env)
-          rm -rf $ENV/lib/python3.10/site-packages/pip \
-                 $ENV/lib/python3.10/site-packages/setuptools \
-                 $ENV/lib/python3.10/site-packages/wheel \
-                 $ENV/lib/python3.10/site-packages/_distutils_hack
+          # 11. Remove pip, setuptools, wheel via conda (not needed in packed runtime env)
+          conda remove -p $ENV pip setuptools wheel --force -y 2>/dev/null || true
 
           # 12. Remove torchaudio (not used by ESM)
           rm -rf $ENV/lib/python3.10/site-packages/torchaudio
 
-          # 13. Remove .dist-info directories (package metadata, not runtime)
-          find $ENV/lib/python3.10/site-packages -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
-
-          # 14. Strip debug symbols from shared libraries
-          find $ENV -name "*.so" -exec strip --strip-debug {} + 2>/dev/null || true
-          find $ENV -name "*.so.*" -exec strip --strip-debug {} + 2>/dev/null || true
+          # 13. Strip debug symbols from shared libraries (site-packages only to avoid conda-tracked libs)
+          find $ENV/lib/python3.10/site-packages -name "*.so" -exec strip --strip-debug {} + 2>/dev/null || true
+          find $ENV/lib/python3.10/site-packages -name "*.so.*" -exec strip --strip-debug {} + 2>/dev/null || true
 
           echo "=== Post-cleanup env size ==="
           du -sh $ENV
@@ -110,7 +104,7 @@ jobs:
         shell: bash -el {0}
         run: |
           conda install -n base conda-pack -y
-          $(conda info --base)/bin/conda-pack -p ./env -o esm_mcp-env.tar.gz --ignore-editable-packages --force
+          $(conda info --base)/bin/conda-pack -p ./env -o esm_mcp-env.tar.gz --ignore-editable-packages
 
       - name: Determine release tag
         id: tag
