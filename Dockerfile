@@ -9,6 +9,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir git+https://github.com/facebookresearch/esm.git
 RUN pip install --no-cache-dir --ignore-installed fastmcp
+RUN pip install --no-cache-dir -U cryptography
+RUN pip install --no-cache-dir torch_geometric torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
+RUN pip install --no-cache-dir "biotite<1.0"
 
 COPY src/ ./src/
 RUN mkdir -p tmp/inputs tmp/outputs
