@@ -23,6 +23,10 @@ RUN mkdir -p tmp/inputs tmp/outputs
 RUN mkdir -p /app/env/bin && \
     ln -s /opt/conda/bin/esm-extract /app/env/bin/esm-extract
 
+# Make /app directory readable and writable by all users (for non-root execution)
+RUN chmod -R 755 /app && \
+    chmod -R 777 /app/tmp/inputs /app/tmp/outputs
+
 ENV PYTHONPATH=/app
 
 CMD ["python", "src/server.py"]
