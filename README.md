@@ -20,10 +20,10 @@ The fastest way to get started. A pre-built Docker image is automatically publis
 docker pull ghcr.io/macromnex/esm_mcp:latest
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v /home/xux/Desktop/AgentMCP/ProteinMCP:/home/xux/Desktop/AgentMCP/ProteinMCP ghcr.io/macromnex/esm_mcp:latest
+claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v ${pwd}:${pwd} ghcr.io/macromnex/esm_mcp:latest
 ```
 
-**Note:** Replace `/home/xux/Desktop/AgentMCP/ProteinMCP` with your actual project directory path.
+**Note:** Run from your project directory. `${pwd}` expands to the current working directory.
 
 **Requirements:**
 - Docker with GPU support (`nvidia-docker` or Docker with NVIDIA runtime)
@@ -46,10 +46,10 @@ cd esm_mcp
 docker build -t esm_mcp:local .
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v /home/xux/Desktop/AgentMCP/ProteinMCP:/home/xux/Desktop/AgentMCP/ProteinMCP esm_mcp:local
+claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v ${pwd}:${pwd} esm_mcp:local
 ```
 
-**Note:** Replace `/home/xux/Desktop/AgentMCP/ProteinMCP` with your actual project directory path.
+**Note:** Run from your project directory. `${pwd}` expands to the current working directory.
 
 **Requirements:**
 - Docker with GPU support
