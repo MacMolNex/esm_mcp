@@ -20,7 +20,7 @@ The fastest way to get started. A pre-built Docker image is automatically publis
 docker pull ghcr.io/macromnex/esm_mcp:latest
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v ${pwd}:${pwd} ghcr.io/macromnex/esm_mcp:latest
+claude mcp add esm -- docker run -i --rm --user `id -u`:`id -g` --gpus all --ipc=host -v `pwd`:`pwd` ghcr.io/macromnex/esm_mcp:latest
 ```
 
 **Note:** Run from your project directory. `${pwd}` expands to the current working directory.
@@ -43,10 +43,10 @@ git clone https://github.com/MacromNex/esm_mcp.git
 cd esm_mcp
 
 # Build the Docker image
-docker build -t esm_mcp:local .
+docker build -t esm_mcp:latest .
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v ${pwd}:${pwd} esm_mcp:local
+claude mcp add esm -- docker run -i --rm --user `id -u`:`id -g` --gpus all --ipc=host -v `pwd`:`pwd` esm_mcp:latest
 ```
 
 **Note:** Run from your project directory. `${pwd}` expands to the current working directory.
