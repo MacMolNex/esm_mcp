@@ -27,6 +27,13 @@ RUN mkdir -p /app/env/bin && \
 RUN chmod -R 755 /app && \
     chmod -R 777 /app/tmp/inputs /app/tmp/outputs
 
+# Set up cache directory and home environment to prevent permission errors
+RUN mkdir -p /app/.cache && chmod -R 777 /app/.cache
+
 ENV PYTHONPATH=/app
+ENV HOME=/app
+ENV XDG_CACHE_HOME=/app/.cache
+ENV TORCH_HOME=/app/.cache/torch
+ENV HF_HOME=/app/.cache/huggingface
 
 CMD ["python", "src/server.py"]
