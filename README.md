@@ -20,8 +20,10 @@ The fastest way to get started. A pre-built Docker image is automatically publis
 docker pull ghcr.io/macromnex/esm_mcp:latest
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run --gpus all -i --rm --user $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro ghcr.io/macromnex/esm_mcp:latest
+claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v /home/xux/Desktop/AgentMCP/ProteinMCP:/home/xux/Desktop/AgentMCP/ProteinMCP ghcr.io/macromnex/esm_mcp:latest
 ```
+
+**Note:** Replace `/home/xux/Desktop/AgentMCP/ProteinMCP` with your actual project directory path.
 
 **Requirements:**
 - Docker with GPU support (`nvidia-docker` or Docker with NVIDIA runtime)
@@ -44,8 +46,10 @@ cd esm_mcp
 docker build -t esm_mcp:local .
 
 # Register with Claude Code (runs as current user to avoid permission issues)
-claude mcp add esm -- docker run --gpus all -i --rm --user $(id -u):$(id -g) -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro esm_mcp:local
+claude mcp add esm -- docker run -i --rm --user ${id -u}:${id -g} --gpus all --ipc=host -v /home/xux/Desktop/AgentMCP/ProteinMCP:/home/xux/Desktop/AgentMCP/ProteinMCP esm_mcp:local
 ```
+
+**Note:** Replace `/home/xux/Desktop/AgentMCP/ProteinMCP` with your actual project directory path.
 
 **Requirements:**
 - Docker with GPU support
@@ -53,8 +57,12 @@ claude mcp add esm -- docker run --gpus all -i --rm --user $(id -u):$(id -g) -v 
 - Git (to clone the repository)
 
 **About the Docker Flags:**
-- `--user $(id -u):$(id -g)` — Runs the container as your current user, so output files are owned by you (not root)
-- `-v /etc/passwd:/etc/passwd:ro` and `-v /etc/group:/etc/group:ro` — Provides user/group info to the container
+- `-i` — Interactive mode for Claude Code
+- `--rm` — Automatically remove container after exit
+- `--user ${id -u}:${id -g}` — Runs the container as your current user, so output files are owned by you (not root)
+- `--gpus all` — Grants access to all available GPUs
+- `--ipc=host` — Uses host IPC namespace for better performance
+- `-v` — Mounts your project directory so the container can access your data
 
 ---
 
