@@ -13,8 +13,13 @@ RUN pip install --no-cache-dir -U cryptography certifi
 RUN pip install --no-cache-dir torch_geometric torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.4.0+cu118.html
 RUN pip install --no-cache-dir "biotite<1.0"
 
-# Pre-download ESM2 models into the image
+# Pre-download ESM2 models into the image (downloads to /root/.cache/torch/)
 RUN python -c "import esm; esm.pretrained.esm2_t33_650M_UR50D(); esm.pretrained.esm2_t36_3B_UR50D()"
+
+# Copy pre-downloaded models to /app/.cache/torch so TORCH_HOME works for non-root users
+RUN mkdir -p /app/.cache/torch/hub/checkpoints && \
+    cp /root/.cache/torch/hub/checkpoints/*.pt /app/.cache/torch/hub/checkpoints/ && \
+    chmod -R a+r /app/.cache/
 
 COPY src/ ./src/
 RUN chmod -R a+r /app/src/
