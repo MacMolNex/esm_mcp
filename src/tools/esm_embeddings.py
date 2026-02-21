@@ -21,7 +21,8 @@ if TYPE_CHECKING:
     from job_queue import QueueManager
 
 # Project structure
-PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+# Note: Do NOT use .resolve() as it breaks symlinks in Docker containers
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 DEFAULT_INPUT_DIR = PROJECT_ROOT / "tmp" / "inputs"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "tmp" / "outputs"
 
