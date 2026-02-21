@@ -97,7 +97,11 @@ def _esm_extract_embeddings_core(
         repr_layer = 33
 
     # Create output directory for embeddings
-    embeddings_dir = output_dir / model_name
+    # Avoid double-nesting: if output_dir already ends with model_name, use it directly
+    if output_dir.name == model_name:
+        embeddings_dir = output_dir
+    else:
+        embeddings_dir = output_dir / model_name
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
     # Get the path to esm-extract in the virtual environment
@@ -149,18 +153,44 @@ def _esm_extract_embeddings_core(
     print(f"[ESM Embeddings] Running esm-extract: model={model_name}, "
           f"sequences={len(sequences)}, CUDA_VISIBLE_DEVICES={cuda_vis}", flush=True)
 
+    # Timeout: ~30s per sequence for large models, minimum 5 minutes
+    timeout_seconds = max(300, len(sequences) * 30)
+    print(f"[ESM Embeddings] Timeout set to {timeout_seconds}s for {len(sequences)} sequences", flush=True)
+
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             check=True,
-            env=env
+            env=env,
+            timeout=timeout_seconds,
         )
 
         # Log GPU usage from subprocess stdout
         for line in result.stdout.splitlines():
             print(f"[ESM Embeddings] {line}", flush=True)
+
+        # Validate that .pt files were actually created
+        pt_files = list(embeddings_dir.glob("*.pt"))
+        if len(pt_files) == 0:
+            error_msg = (
+                f"esm-extract completed but no .pt files found in {embeddings_dir}. "
+                f"This usually means the model weights are missing from TORCH_HOME={os.environ.get('TORCH_HOME', 'not set')}. "
+                f"Check that the model '{model_name}' was pre-downloaded during Docker build."
+            )
+            print(f"[ESM Embeddings] ERROR: {error_msg}", flush=True)
+            return {
+                "status": "error",
+                "error_message": error_msg,
+                "csv_path": str(csv_path),
+                "embeddings_dir": str(embeddings_dir),
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            }
+
+        if len(pt_files) < len(sequences):
+            print(f"[ESM Embeddings] WARNING: Expected {len(sequences)} .pt files but found {len(pt_files)}", flush=True)
 
         # Prepare response
         response = {
@@ -172,6 +202,7 @@ def _esm_extract_embeddings_core(
             "repr_layer": repr_layer,
             "num_sequences": len(sequences),
             "num_unique_sequences": len(sequences),
+            "num_embeddings_created": len(pt_files),
             "sequence_ids": seq_ids[:10] if len(seq_ids) > 10 else seq_ids,  # Show first 10
             "total_ids": len(seq_ids),
             "stdout": result.stdout,
@@ -179,6 +210,20 @@ def _esm_extract_embeddings_core(
 
         return response
 
+    except subprocess.TimeoutExpired:
+        error_msg = (
+            f"esm-extract timed out after {timeout_seconds}s. "
+            f"This usually means the model '{model_name}' weights are missing and esm-extract is "
+            f"trying to download them (which hangs in Docker). Check that TORCH_HOME={os.environ.get('TORCH_HOME', 'not set')} "
+            f"contains the pre-downloaded model checkpoints."
+        )
+        print(f"[ESM Embeddings] TIMEOUT: {error_msg}", flush=True)
+        return {
+            "status": "error",
+            "error_message": error_msg,
+            "csv_path": str(csv_path),
+            "embeddings_dir": str(embeddings_dir),
+        }
     except subprocess.CalledProcessError as e:
         print(f"[ESM Embeddings] esm-extract failed (exit code {e.returncode})", flush=True)
         if e.stderr:

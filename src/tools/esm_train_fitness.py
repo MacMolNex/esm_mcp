@@ -50,7 +50,20 @@ def load_data(data_dir, backbone_model='esm2_t33_650M_UR50D', target_col='log_fi
         emb_dir = os.path.join(data_dir, backbone_model)
 
         if not os.path.exists(fasta_file):
-            raise FileNotFoundError(f"FASTA file not found: {fasta_file}")
+            raise FileNotFoundError(f"FASTA file not found: {fasta_file}. Run esm_extract_embeddings_from_csv first with output_dir={data_dir}")
+
+        if not os.path.isdir(emb_dir):
+            # Check for common double-nesting issue
+            nested = os.path.join(emb_dir, backbone_model)
+            if os.path.isdir(nested):
+                raise FileNotFoundError(
+                    f"Embeddings directory has double-nesting: found {nested} instead of .pt files in {emb_dir}. "
+                    f"Move the .pt files up one level: mv {nested}/*.pt {emb_dir}/"
+                )
+            raise FileNotFoundError(
+                f"Embeddings directory not found: {emb_dir}. "
+                f"Run esm_extract_embeddings_from_csv first with output_dir={data_dir}"
+            )
 
         # Build seq -> embedding mapping
         seq2embd = {}
